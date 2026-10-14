@@ -1,8 +1,47 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  Clock,
+  CalendarRange,
+  Receipt,
+  Award,
+  Megaphone,
+  RefreshCw,
+  Plus,
+  Search,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Printer,
+  Download,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Filter,
+  X,
+  ChevronDown,
+  ChevronUp,
+  ShieldCheck,
+  AlertCircle,
+  Calendar,
+  Briefcase,
+  Sparkles,
+  ArrowUpRight,
+  FileText,
+  Check,
+  Info,
+  Clock3,
+  UserCheck,
+  CheckSquare,
+  Shield,
+  Layers
+} from 'lucide-react';
 import './styles.css';
 
 const API_BASE = 'http://127.0.0.1:8000/api';
@@ -43,10 +82,28 @@ export const numberToWords = (num) => {
   return inWords(n) + ' Only';
 };
 
-// Backwards-compatible aliases
+// Aliases for compatibility
 export const formatINR = formatNumber;
 export const formatINRCompact = formatNumberCompact;
 export const numberToINRWords = numberToWords;
+
+// --- DETERMINISTIC AVATAR GRADIENT GENERATOR ---
+const getAvatarGradient = (name = '') => {
+  const gradients = [
+    'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+    'linear-gradient(135deg, #10b981 0%, #047857 100%)',
+    'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+    'linear-gradient(135deg, #f59e0b 0%, #b45309 100%)',
+    'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+    'linear-gradient(135deg, #06b6d4 0%, #0e7490 100%)',
+    'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return gradients[Math.abs(hash) % gradients.length];
+};
 
 // --- CLIENT-SIDE CSV EXPORT ---
 export const exportToCSV = (filename, rows) => {
@@ -98,29 +155,36 @@ export default function App() {
   const [finance, setFinance] = useState([]);
   const [performance, setPerformance] = useState([]);
   const [notices, setNotices] = useState([]);
-  const [toastMessage, setToastMessage] = useState(null);
+  
+  // Rich Toast System: { message: string, type: 'success' | 'error' | 'info' }
+  const [toast, setToast] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [voucherRecord, setVoucherRecord] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Show Toast
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(prev => (prev?.message === message ? null : prev));
+    }, 4000);
+  }, []);
 
   // Fetch all data
   const fetchData = async () => {
+    setIsRefreshing(true);
     try {
       const [dRes, uRes, deptRes, aRes, lRes, fRes, pRes, nRes] = await Promise.all([
-        fetch(`${API_BASE}/dashboard`).then(r => r.json()),
-        fetch(`${API_BASE}/users`).then(r => r.json()),
-        fetch(`${API_BASE}/departments`).then(r => r.json()),
-        fetch(`${API_BASE}/attendance`).then(r => r.json()),
-        fetch(`${API_BASE}/leaves`).then(r => r.json()),
-        fetch(`${API_BASE}/finance`).then(r => r.json()),
-        fetch(`${API_BASE}/performance`).then(r => r.json()),
-        fetch(`${API_BASE}/notices`).then(r => r.json())
+        fetch(`${API_BASE}/dashboard`).then(r => r.ok ? r.json() : null),
+        fetch(`${API_BASE}/users`).then(r => r.ok ? r.json() : []),
+        fetch(`${API_BASE}/departments`).then(r => r.ok ? r.json() : []),
+        fetch(`${API_BASE}/attendance`).then(r => r.ok ? r.json() : []),
+        fetch(`${API_BASE}/leaves`).then(r => r.ok ? r.json() : []),
+        fetch(`${API_BASE}/finance`).then(r => r.ok ? r.json() : []),
+        fetch(`${API_BASE}/performance`).then(r => r.ok ? r.json() : []),
+        fetch(`${API_BASE}/notices`).then(r => r.ok ? r.json() : [])
       ]);
 
       if (dRes) setDashboardData(dRes);
@@ -133,8 +197,10 @@ export default function App() {
       if (Array.isArray(nRes)) setNotices(nRes);
     } catch (err) {
       console.error('API fetch error:', err);
+      showToast('Could not sync latest system data. Please check connection.', 'error');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -142,15 +208,28 @@ export default function App() {
     fetchData();
   }, []);
 
+  // Keyboard accessibility: ESC key closes open modals and dialogs
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (confirmDialog) setConfirmDialog(null);
+        else if (voucherRecord) setVoucherRecord(null);
+        else if (activeModal) setActiveModal(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [confirmDialog, voucherRecord, activeModal]);
+
   const navItems = [
-    { id: 'Dashboard', label: 'Overview', icon: '📊' },
-    { id: 'Users', label: 'Students & Personnel', icon: '🎓' },
-    { id: 'Departments', label: 'Departments', icon: '🏢' },
-    { id: 'Attendance', label: 'Attendance', icon: '⏱️' },
-    { id: 'Leaves', label: 'Leave Requests', icon: '🗓️' },
-    { id: 'Finance', label: 'Finance & Accounts', icon: '💳' },
-    { id: 'Performance', label: 'Academic & Performance', icon: '⭐' },
-    { id: 'Notices', label: 'Notice Board', icon: '📢' },
+    { id: 'Dashboard', label: 'Executive Pulse', icon: LayoutDashboard },
+    { id: 'Users', label: 'Team Directory', icon: Users },
+    { id: 'Departments', label: 'Departments', icon: Building2 },
+    { id: 'Attendance', label: 'Attendance & Shifts', icon: Clock },
+    { id: 'Leaves', label: 'Leave Requests', icon: CalendarRange },
+    { id: 'Finance', label: 'Finance & Treasury', icon: Receipt },
+    { id: 'Performance', label: 'Performance Reviews', icon: Award },
+    { id: 'Notices', label: 'Company Bulletins', icon: Megaphone },
   ];
 
   return (
@@ -159,36 +238,46 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand-section">
           <div className="brand-logo">
-            <div className="logo-icon">⚡</div>
+            <div className="logo-icon">
+              <Layers size={22} strokeWidth={2.4} />
+            </div>
             <div className="brand-info">
               <h2>SmartERP</h2>
-              <span>National Academic & Enterprise Suite</span>
+              <span>Enterprise Operations Suite</span>
             </div>
           </div>
         </div>
 
         <div className="nav-section">
-          <div className="nav-category">Main Menu</div>
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
+          <div className="nav-category">Management Modules</div>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(item.id)}
+              >
+                <span className="nav-icon">
+                  <Icon size={18} strokeWidth={2} />
+                </span>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="sidebar-footer">
           <div className="user-mini-card">
-            <div className="user-avatar-small" style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}>
+            <div
+              className="user-avatar-small"
+              style={{ background: getAvatarGradient('Abhaya Kumar Kar') }}
+            >
               AK
             </div>
             <div className="user-info-text">
               <div className="user-name">Abhaya Kumar Kar</div>
-              <div className="user-role">System Administrator & Dean</div>
+              <div className="user-role">System Administrator</div>
             </div>
           </div>
         </div>
@@ -201,15 +290,20 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h1>{navItems.find(n => n.id === activeTab)?.label || activeTab}</h1>
             </div>
-            <p>Smart ERP Management Suite • Real-time Operations & Academic Resource OS</p>
+            <p>Smart ERP Platform • Enterprise Resource Planning & Workforce Management</p>
           </div>
           <div className="topbar-actions">
             <div className="system-status">
               <span className="pulse-dot"></span>
-              FastAPI Connected
+              Backend Connected
             </div>
-            <button className="btn btn-primary btn-sm" onClick={fetchData}>
-              🔄 Refresh
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={fetchData}
+              disabled={isRefreshing}
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'spin-anim' : ''} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
             </button>
           </div>
         </header>
@@ -233,6 +327,7 @@ export default function App() {
               openModal={setActiveModal}
               onUserDeleted={fetchData}
               showToast={showToast}
+              setConfirmDialog={setConfirmDialog}
             />
           )}
 
@@ -243,6 +338,7 @@ export default function App() {
               openModal={setActiveModal}
               onDeptDeleted={fetchData}
               showToast={showToast}
+              setConfirmDialog={setConfirmDialog}
             />
           )}
 
@@ -283,6 +379,7 @@ export default function App() {
               openModal={setActiveModal}
               onDeleted={fetchData}
               showToast={showToast}
+              setConfirmDialog={setConfirmDialog}
             />
           )}
 
@@ -293,20 +390,36 @@ export default function App() {
               openModal={setActiveModal}
               onDeleted={fetchData}
               showToast={showToast}
+              setConfirmDialog={setConfirmDialog}
             />
           )}
         </main>
       </div>
 
       {/* TOAST NOTIFICATION */}
-      {toastMessage && (
-        <div className="toast">
-          <span>✨</span>
-          <span>{toastMessage}</span>
+      {toast && (
+        <div className={`toast toast-${toast.type || 'info'}`}>
+          <div className="toast-icon">
+            {toast.type === 'success' && <CheckCircle2 size={18} />}
+            {toast.type === 'error' && <AlertCircle size={18} />}
+            {toast.type === 'info' && <Info size={18} />}
+          </div>
+          <div className="toast-message">{toast.message}</div>
+          <button className="toast-close" onClick={() => setToast(null)} title="Dismiss">
+            <X size={15} />
+          </button>
         </div>
       )}
 
-      {/* MODALS */}
+      {/* IN-APP CONFIRMATION DIALOG */}
+      {confirmDialog && (
+        <ConfirmModal
+          dialog={confirmDialog}
+          onClose={() => setConfirmDialog(null)}
+        />
+      )}
+
+      {/* MODAL MANAGER */}
       {activeModal && (
         <ModalManager
           modalType={activeModal}
@@ -316,18 +429,69 @@ export default function App() {
           onSuccess={(msg) => {
             fetchData();
             setActiveModal(null);
-            showToast(msg);
+            showToast(msg, 'success');
           }}
+          showToast={showToast}
         />
       )}
 
-      {/* GST VOUCHER / FEE RECEIPT MODAL */}
+      {/* GST VOUCHER / RECEIPT MODAL */}
       {voucherRecord && (
         <VoucherModal
           record={voucherRecord}
           onClose={() => setVoucherRecord(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------- CONFIRMATION MODAL ----------------
+function ConfirmModal({ dialog, onClose }) {
+  const { title, message, confirmText = 'Confirm Delete', onConfirm, isDanger = true } = dialog;
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await onConfirm();
+      onClose();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={20} color={isDanger ? '#ef4444' : '#3b82f6'} />
+            <h3>{title}</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.5 }}>
+            {message}
+          </p>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={isDanger ? 'btn btn-danger' : 'btn btn-primary'}
+            onClick={handleConfirm}
+            disabled={submitting}
+          >
+            {submitting ? 'Processing...' : confirmText}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -350,42 +514,52 @@ function DashboardView({ data, finance, departments, notices, openModal }) {
       {/* QUICK ACTIONS */}
       <div className="quick-actions-bar">
         <button className="action-card-btn" onClick={() => openModal('addUser')}>
-          <div className="action-icon">🎓</div>
+          <div className="action-icon">
+            <Users size={18} />
+          </div>
           <div className="action-info">
-            <div className="action-title">Add Student / Faculty</div>
-            <div className="action-desc">Enroll student or faculty member</div>
+            <div className="action-title">Add Team Member</div>
+            <div className="action-desc">Onboard staff or manager</div>
           </div>
         </button>
 
         <button className="action-card-btn" onClick={() => openModal('addAttendance')}>
-          <div className="action-icon">⏱️</div>
+          <div className="action-icon">
+            <Clock size={18} />
+          </div>
           <div className="action-info">
             <div className="action-title">Log Attendance</div>
-            <div className="action-desc">Daily classroom & lab check-in</div>
+            <div className="action-desc">Record shift or daily presence</div>
           </div>
         </button>
 
         <button className="action-card-btn" onClick={() => openModal('addLeave')}>
-          <div className="action-icon">🗓️</div>
+          <div className="action-icon">
+            <CalendarRange size={18} />
+          </div>
           <div className="action-info">
-            <div className="action-title">Leave / Permission</div>
-            <div className="action-desc">Academic leave or medical excuse</div>
+            <div className="action-title">Submit Leave</div>
+            <div className="action-desc">Request time-off or permission</div>
           </div>
         </button>
 
         <button className="action-card-btn" onClick={() => openModal('addFinance')}>
-          <div className="action-icon">💳</div>
+          <div className="action-icon">
+            <Receipt size={18} />
+          </div>
           <div className="action-info">
             <div className="action-title">Record Transaction</div>
-            <div className="action-desc">Log fee, research grant, or expense</div>
+            <div className="action-desc">Post invoice, revenue, or expense</div>
           </div>
         </button>
 
         <button className="action-card-btn" onClick={() => openModal('addNotice')}>
-          <div className="action-icon">📢</div>
+          <div className="action-icon">
+            <Megaphone size={18} />
+          </div>
           <div className="action-info">
             <div className="action-title">Post Bulletin</div>
-            <div className="action-desc">Broadcast to campus & institute</div>
+            <div className="action-desc">Broadcast circular to company</div>
           </div>
         </button>
       </div>
@@ -394,75 +568,83 @@ function DashboardView({ data, finance, departments, notices, openModal }) {
       <div className="kpi-grid">
         <div className="kpi-card">
           <div className="kpi-header">
-            <span className="kpi-title">Enrolled Students & Staff</span>
-            <span className="kpi-icon-wrapper kpi-icon-blue">👥</span>
+            <span className="kpi-title">Active Workforce</span>
+            <span className="kpi-icon-wrapper kpi-icon-blue">
+              <Users size={18} />
+            </span>
           </div>
           <div className="kpi-value">{data.users}</div>
-          <div className="kpi-subtext positive">Across {data.departments} academic & operational departments</div>
+          <div className="kpi-subtext positive">Across {data.departments} operational departments</div>
         </div>
 
         <div className="kpi-card">
           <div className="kpi-header">
             <span className="kpi-title">Net Financial Balance</span>
-            <span className="kpi-icon-wrapper kpi-icon-emerald">📈</span>
+            <span className="kpi-icon-wrapper kpi-icon-emerald">
+              <TrendingUp size={18} />
+            </span>
           </div>
           <div className="kpi-value">{formatNumber(data.net_balance)}</div>
           <div className="kpi-subtext positive">
-            Rev: {formatNumberCompact(data.total_revenue)} | Exp: {formatNumberCompact(data.total_expenses)} ({formatNumberCompact(data.net_balance)} Net Surplus)
+            Rev: {formatNumberCompact(data.total_revenue)} | Exp: {formatNumberCompact(data.total_expenses)}
           </div>
         </div>
 
         <div className="kpi-card">
           <div className="kpi-header">
             <span className="kpi-title">Pending Leave Requests</span>
-            <span className="kpi-icon-wrapper kpi-icon-amber">⏳</span>
+            <span className="kpi-icon-wrapper kpi-icon-amber">
+              <Clock3 size={18} />
+            </span>
           </div>
           <div className="kpi-value">{data.pending_leaves}</div>
-          <div className="kpi-subtext">Awaiting Dean & HOD approvals</div>
+          <div className="kpi-subtext">Awaiting manager approval</div>
         </div>
 
         <div className="kpi-card">
           <div className="kpi-header">
-            <span className="kpi-title">Academic & CGPA Score</span>
-            <span className="kpi-icon-wrapper kpi-icon-purple">⭐</span>
+            <span className="kpi-title">Average Performance</span>
+            <span className="kpi-icon-wrapper kpi-icon-purple">
+              <Award size={18} />
+            </span>
           </div>
-          <div className="kpi-value">{data.avg_performance || '4.8'} / 5.0</div>
-          <div className="kpi-subtext positive">High institutional performance benchmark</div>
+          <div className="kpi-value">{data.avg_performance ? Number(data.avg_performance).toFixed(1) : '4.8'} / 5.0</div>
+          <div className="kpi-subtext positive">High organizational benchmark</div>
         </div>
       </div>
 
       {/* VISUAL CHARTS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
-        <div className="panel">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+        <div className="panel" style={{ marginBottom: 0 }}>
           <div className="panel-header">
             <div className="panel-title">
-              <h2>Financial Overview</h2>
-              <p>Revenue vs Expenses Breakdown</p>
+              <h2>Financial Breakdown</h2>
+              <p>Revenue, operating expenses, and net surplus</p>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="name" stroke="#64748b" />
-              <YAxis stroke="#64748b" tickFormatter={(val) => formatNumberCompact(val)} />
+              <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#64748b" tickFormatter={(val) => formatNumberCompact(val)} tick={{ fontSize: 12 }} />
               <Tooltip formatter={(val) => [formatNumber(val), 'Amount']} />
               <Bar dataKey="amount" fill="#3b82f6" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="panel">
+        <div className="panel" style={{ marginBottom: 0 }}>
           <div className="panel-header">
             <div className="panel-title">
-              <h2>Department Distribution</h2>
-              <p>Student & Staff Allocation Across Disciplines</p>
+              <h2>Department Headcount</h2>
+              <p>Team members distribution across divisions</p>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={deptData} layout="vertical" margin={{ top: 10, right: 20, left: 40, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis type="number" allowDecimals={false} stroke="#64748b" />
-              <YAxis dataKey="name" type="category" stroke="#64748b" width={120} />
+              <XAxis type="number" allowDecimals={false} stroke="#64748b" tick={{ fontSize: 12 }} />
+              <YAxis dataKey="name" type="category" stroke="#64748b" width={130} tick={{ fontSize: 11 }} />
               <Tooltip />
               <Bar dataKey="count" fill="#8b5cf6" radius={[0, 6, 6, 0]} />
             </BarChart>
@@ -474,11 +656,12 @@ function DashboardView({ data, finance, departments, notices, openModal }) {
       <div className="panel">
         <div className="panel-header">
           <div className="panel-title">
-            <h2>Campus & Official Bulletins</h2>
-            <p>Notices, academic deadlines, and institutional updates</p>
+            <h2>Company Bulletins & Circulars</h2>
+            <p>Recent operational updates, announcements, and notices</p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={() => openModal('addNotice')}>
-            + New Notice
+            <Plus size={14} />
+            <span>New Notice</span>
           </button>
         </div>
         <div className="notice-grid">
@@ -491,90 +674,108 @@ function DashboardView({ data, finance, departments, notices, openModal }) {
                 <p className="notice-body">{notice.content}</p>
               </div>
               <div className="notice-footer">
-                <span>By: {notice.author_name || 'Dean & Administration'}</span>
-                <span>{notice.created_at ? new Date(notice.created_at).toLocaleDateString('en-IN') : 'Recent'}</span>
+                <span>By: {notice.author_name || 'Executive Management'}</span>
+                <span>{notice.created_at ? new Date(notice.created_at).toLocaleDateString() : 'Recent'}</span>
               </div>
             </div>
           ))}
-          {notices.length === 0 && <p style={{ color: '#94a3b8' }}>No announcements published yet.</p>}
+          {notices.length === 0 && (
+            <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+              <div className="empty-state-icon">
+                <Megaphone size={22} />
+              </div>
+              <div className="empty-state-title">No announcements published yet</div>
+              <div className="empty-state-desc">Broadcast updates, policies, and company events to keep your organization aligned.</div>
+              <button className="btn btn-primary btn-sm" onClick={() => openModal('addNotice')}>
+                <Plus size={14} />
+                <span>Post First Announcement</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ---------------- STUDENTS & PERSONNEL VIEW ----------------
-function UsersView({ users, departments, openModal, onUserDeleted, showToast }) {
+// ---------------- TEAM DIRECTORY VIEW ----------------
+function UsersView({ users, departments, openModal, onUserDeleted, showToast, setConfirmDialog }) {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
   const [roleFilter, setRoleFilter] = useState('ALL');
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
+      const empId = `EMP-${String(u.id).padStart(3, '0')}`;
       const matchSearch =
         u.name.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase()) ||
-        `STU-IND-${String(u.id).padStart(3, '0')}`.toLowerCase().includes(search.toLowerCase());
+        empId.toLowerCase().includes(search.toLowerCase());
       const matchDept = deptFilter === 'ALL' || u.department_name === deptFilter;
       const matchRole =
         roleFilter === 'ALL'
           ? true
-          : roleFilter === 'STUDENT'
-          ? u.role === 'student'
-          : roleFilter === 'FACULTY'
-          ? u.role === 'employee'
-          : roleFilter === 'MANAGER'
-          ? u.role === 'manager'
-          : u.role === 'admin';
+          : u.role.toLowerCase() === roleFilter.toLowerCase();
       return matchSearch && matchDept && matchRole;
     });
   }, [users, search, deptFilter, roleFilter]);
 
-  const studentsCount = useMemo(() => users.filter(u => u.role === 'student').length, [users]);
-  const facultyCount = useMemo(() => users.filter(u => u.role === 'employee').length, [users]);
-  const managerCount = useMemo(() => users.filter(u => u.role === 'manager').length, [users]);
+  const employeesCount = useMemo(() => users.filter(u => u.role === 'employee').length, [users]);
+  const managersCount = useMemo(() => users.filter(u => u.role === 'manager').length, [users]);
+  const adminsCount = useMemo(() => users.filter(u => u.role === 'admin').length, [users]);
 
   const handleExportCSV = () => {
     const rows = filteredUsers.map(u => ({
-      'Roll / Employee ID': u.role === 'student' ? `STU-IND-${String(u.id).padStart(3, '0')}` : `EMP-IND-${String(u.id).padStart(3, '0')}`,
+      'Employee ID': `EMP-${String(u.id).padStart(3, '0')}`,
       'Full Name': u.name,
       'Email Address': u.email,
-      'Role Category': u.role.toUpperCase(),
-      'Department / Branch': u.department_name || 'Unassigned',
+      'Role': u.role.toUpperCase(),
+      'Department': u.department_name || 'Unassigned',
       'Status': u.is_active ? 'Active' : 'Inactive'
     }));
-    exportToCSV(`SmartERP_Student_Roster_${new Date().toISOString().slice(0, 10)}.csv`, rows);
-    showToast('Exported student & personnel roster to CSV!');
+    exportToCSV(`Team_Directory_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    showToast('Exported team directory roster to CSV', 'success');
   };
 
-  const handleDelete = async (userId) => {
-    if (!window.confirm('Are you sure you want to remove this record?')) return;
-    try {
-      const res = await fetch(`${API_BASE}/users/${userId}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('Record deleted successfully');
-        onUserDeleted();
+  const promptDelete = (user) => {
+    setConfirmDialog({
+      title: 'Remove Team Member',
+      message: `Are you sure you want to remove ${user.name} (${user.email})? This action will archive their record.`,
+      confirmText: 'Remove Member',
+      isDanger: true,
+      onConfirm: async () => {
+        const res = await fetch(`${API_BASE}/users/${user.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Profile for ${user.name} has been removed`, 'success');
+          onUserDeleted();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.detail || 'Could not delete member', 'error');
+        }
       }
-    } catch (e) {
-      console.error(e);
-    }
+    });
   };
 
   return (
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <h2>Students & Personnel Directory ({filteredUsers.length})</h2>
-          <p>Indian student scholars, faculty members, mentors, and administrators</p>
+          <h2>Team Directory ({filteredUsers.length})</h2>
+          <p>Organizational members, department leads, and system administrators</p>
         </div>
         <div className="panel-controls">
           <div className="search-bar">
-            <span>🔍</span>
+            <Search size={15} color="#94a3b8" />
             <input
-              placeholder="Search by student name, roll no, email..."
+              placeholder="Search by name, EMP ID, email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {search && (
+              <button className="search-clear-btn" onClick={() => setSearch('')} title="Clear search">
+                <X size={14} />
+              </button>
+            )}
           </div>
           <select
             className="form-select"
@@ -588,10 +789,12 @@ function UsersView({ users, departments, openModal, onUserDeleted, showToast }) 
             ))}
           </select>
           <button className="btn btn-secondary" onClick={handleExportCSV}>
-            📥 Export Roster (CSV)
+            <Download size={15} />
+            <span>Export CSV</span>
           </button>
           <button className="btn btn-primary" onClick={() => openModal('addUser')}>
-            + Add Student / Staff
+            <Plus size={15} />
+            <span>Add Member</span>
           </button>
         </div>
       </div>
@@ -605,22 +808,22 @@ function UsersView({ users, departments, openModal, onUserDeleted, showToast }) 
           All Members ({users.length})
         </button>
         <button
-          className={`filter-pill ${roleFilter === 'STUDENT' ? 'active' : ''}`}
-          onClick={() => setRoleFilter('STUDENT')}
+          className={`filter-pill ${roleFilter === 'EMPLOYEE' ? 'active' : ''}`}
+          onClick={() => setRoleFilter('EMPLOYEE')}
         >
-          🎓 Students ({studentsCount})
-        </button>
-        <button
-          className={`filter-pill ${roleFilter === 'FACULTY' ? 'active' : ''}`}
-          onClick={() => setRoleFilter('FACULTY')}
-        >
-          👔 Faculty & Staff ({facultyCount})
+          Staff & Engineers ({employeesCount})
         </button>
         <button
           className={`filter-pill ${roleFilter === 'MANAGER' ? 'active' : ''}`}
           onClick={() => setRoleFilter('MANAGER')}
         >
-          💼 Heads & Managers ({managerCount})
+          Managers & Leads ({managersCount})
+        </button>
+        <button
+          className={`filter-pill ${roleFilter === 'ADMIN' ? 'active' : ''}`}
+          onClick={() => setRoleFilter('ADMIN')}
+        >
+          Administrators ({adminsCount})
         </button>
       </div>
 
@@ -628,28 +831,30 @@ function UsersView({ users, departments, openModal, onUserDeleted, showToast }) 
         <table className="data-table">
           <thead>
             <tr>
-              <th>Roll / ID</th>
-              <th>Student / Member Name</th>
+              <th>ID</th>
+              <th>Member Name</th>
               <th>Email Address</th>
               <th>Role</th>
-              <th>Department / Discipline</th>
-              <th>Attendance Status</th>
-              <th>Actions</th>
+              <th>Department</th>
+              <th>Status</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredUsers.map((u) => {
-              const rollId = u.role === 'student'
-                ? `STU-IND-${String(u.id).padStart(3, '0')}`
-                : u.role === 'admin'
-                ? `ADM-${String(u.id).padStart(3, '0')}`
-                : `FAC-${String(u.id).padStart(3, '0')}`;
+              const empId = `EMP-${String(u.id).padStart(3, '0')}`;
+              const initials = u.name
+                .split(' ')
+                .map(part => part[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase();
 
               return (
                 <tr key={u.id}>
                   <td>
-                    <code style={{ background: '#f1f5f9', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
-                      {rollId}
+                    <code style={{ background: '#f1f5f9', padding: '3px 7px', borderRadius: '5px', fontSize: '11.5px', fontWeight: '700', color: '#334155' }}>
+                      {empId}
                     </code>
                   </td>
                   <td>
@@ -657,39 +862,39 @@ function UsersView({ users, departments, openModal, onUserDeleted, showToast }) 
                       <div
                         className="user-avatar-small"
                         style={{
-                          width: '32px',
-                          height: '32px',
+                          width: '34px',
+                          height: '34px',
                           fontSize: '12px',
-                          background: u.role === 'student' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : undefined
+                          background: getAvatarGradient(u.name)
                         }}
                       >
-                        {u.name.substring(0, 2).toUpperCase()}
+                        {initials}
                       </div>
                       <div>
                         <strong>{u.name}</strong>
-                        {u.role === 'student' && (
-                          <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: '600' }}>
-                            Indian Student Scholar
-                          </div>
-                        )}
                       </div>
                     </div>
                   </td>
-                  <td>{u.email}</td>
+                  <td style={{ color: '#475569' }}>{u.email}</td>
                   <td>
                     <span className={`role-badge role-${u.role.toLowerCase()}`}>
-                      {u.role === 'student' ? '🎓 Student' : u.role === 'employee' ? '👔 Faculty' : u.role}
+                      {u.role}
                     </span>
                   </td>
-                  <td>{u.department_name || 'General Academic'}</td>
+                  <td>{u.department_name || 'Unassigned'}</td>
                   <td>
                     <span className={`status-badge ${u.is_active ? 'status-active' : 'status-inactive'}`}>
-                      {u.is_active ? 'Active & Enrolled' : 'Inactive'}
+                      <span className="pulse-dot" style={{ width: '6px', height: '6px' }}></span>
+                      {u.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td>
-                    <button className="btn-icon" title="Remove Record" onClick={() => handleDelete(u.id)}>
-                      🗑️
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      className="btn-icon"
+                      title="Remove Member"
+                      onClick={() => promptDelete(u)}
+                    >
+                      <Trash2 size={15} />
                     </button>
                   </td>
                 </tr>
@@ -697,8 +902,26 @@ function UsersView({ users, departments, openModal, onUserDeleted, showToast }) 
             })}
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                  No students or personnel matched your query.
+                <td colSpan="7">
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      <Users size={22} />
+                    </div>
+                    <div className="empty-state-title">No team members found</div>
+                    <div className="empty-state-desc">
+                      {search ? `No members matched "${search}". Check your spelling or clear active filters.` : 'Get started by onboarding your first employee.'}
+                    </div>
+                    {search ? (
+                      <button className="btn btn-secondary btn-sm" onClick={() => { setSearch(''); setDeptFilter('ALL'); setRoleFilter('ALL'); }}>
+                        Clear Search & Filters
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary btn-sm" onClick={() => openModal('addUser')}>
+                        <Plus size={14} />
+                        <span>Add Team Member</span>
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             )}
@@ -710,29 +933,36 @@ function UsersView({ users, departments, openModal, onUserDeleted, showToast }) 
 }
 
 // ---------------- DEPARTMENTS VIEW ----------------
-function DepartmentsView({ departments, openModal, onDeptDeleted, showToast }) {
-  const handleDelete = async (deptId) => {
-    if (!window.confirm('Delete this department? Users in this department will be unassigned.')) return;
-    try {
-      const res = await fetch(`${API_BASE}/departments/${deptId}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('Department removed');
-        onDeptDeleted();
+function DepartmentsView({ departments, openModal, onDeptDeleted, showToast, setConfirmDialog }) {
+  const promptDelete = (dept) => {
+    setConfirmDialog({
+      title: 'Dissolve Department',
+      message: `Are you sure you want to dissolve the "${dept.name}" department? All affiliated employees will be marked as Unassigned.`,
+      confirmText: 'Dissolve Department',
+      isDanger: true,
+      onConfirm: async () => {
+        const res = await fetch(`${API_BASE}/departments/${dept.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Department "${dept.name}" dissolved`, 'success');
+          onDeptDeleted();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.detail || 'Could not dissolve department', 'error');
+        }
       }
-    } catch (e) {
-      console.error(e);
-    }
+    });
   };
 
   return (
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <h2>Organizational & Academic Departments ({departments.length})</h2>
-          <p>Academic faculties, research centers, and enterprise divisions</p>
+          <h2>Organizational Departments ({departments.length})</h2>
+          <p>Business divisions, research centers, and operational teams</p>
         </div>
         <button className="btn btn-primary" onClick={() => openModal('addDept')}>
-          + Add Department
+          <Plus size={15} />
+          <span>Add Department</span>
         </button>
       </div>
 
@@ -741,22 +971,33 @@ function DepartmentsView({ departments, openModal, onDeptDeleted, showToast }) {
           <div className="dept-card" key={d.id}>
             <div>
               <div className="dept-header">
-                <h3 style={{ fontSize: '18px', fontWeight: '700' }}>{d.name}</h3>
-                <span className="dept-badge">{d.employee_count} Enrolled</span>
+                <h3 style={{ fontSize: '17px', fontWeight: '700' }}>{d.name}</h3>
+                <span className="dept-badge">{d.employee_count} {d.employee_count === 1 ? 'Member' : 'Members'}</span>
               </div>
-              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '18px' }}>
+              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '18px', lineHeight: 1.5 }}>
                 {d.description || 'No description provided for this department.'}
               </p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
-              <button className="btn btn-danger btn-sm" onClick={() => handleDelete(d.id)}>
-                Delete Department
+              <button className="btn btn-danger btn-sm" onClick={() => promptDelete(d)}>
+                <Trash2 size={13} />
+                <span>Dissolve</span>
               </button>
             </div>
           </div>
         ))}
         {departments.length === 0 && (
-          <p style={{ color: '#94a3b8' }}>No departments created yet.</p>
+          <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+            <div className="empty-state-icon">
+              <Building2 size={22} />
+            </div>
+            <div className="empty-state-title">No departments created yet</div>
+            <div className="empty-state-desc">Organize your personnel into clear functional units like Engineering, HR, and Finance.</div>
+            <button className="btn btn-primary btn-sm" onClick={() => openModal('addDept')}>
+              <Plus size={14} />
+              <span>Create Department</span>
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -776,8 +1017,8 @@ function AttendanceView({ attendance, users, openModal }) {
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <h2>Student & Staff Attendance Log ({filteredAttendance.length})</h2>
-          <p>Real-time classroom lectures, remote labs, and campus presence</p>
+          <h2>Workforce Attendance Logs ({filteredAttendance.length})</h2>
+          <p>Real-time shift presence, remote check-ins, and daily tracking</p>
         </div>
         <div className="panel-controls">
           <input
@@ -793,7 +1034,8 @@ function AttendanceView({ attendance, users, openModal }) {
             </button>
           )}
           <button className="btn btn-primary" onClick={() => openModal('addAttendance')}>
-            + Log Attendance
+            <Plus size={15} />
+            <span>Log Attendance</span>
           </button>
         </div>
       </div>
@@ -802,20 +1044,25 @@ function AttendanceView({ attendance, users, openModal }) {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Record ID</th>
-              <th>Student / Staff Name</th>
+              <th>Record #</th>
+              <th>Team Member</th>
               <th>Date</th>
-              <th>Attendance Status</th>
+              <th>Presence Status</th>
             </tr>
           </thead>
           <tbody>
             {filteredAttendance.map((a) => (
               <tr key={a.id}>
-                <td>#{a.id}</td>
+                <td>
+                  <code style={{ background: '#f1f5f9', padding: '3px 7px', borderRadius: '5px', fontSize: '11.5px', fontWeight: '700', color: '#475569' }}>
+                    #{a.id}
+                  </code>
+                </td>
                 <td><strong>{a.user_name}</strong></td>
                 <td>{a.date}</td>
                 <td>
                   <span className={`status-badge status-${a.status.toLowerCase()}`}>
+                    <span className="pulse-dot" style={{ width: '6px', height: '6px' }}></span>
                     {a.status}
                   </span>
                 </td>
@@ -823,8 +1070,20 @@ function AttendanceView({ attendance, users, openModal }) {
             ))}
             {filteredAttendance.length === 0 && (
               <tr>
-                <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                  No attendance records found.
+                <td colSpan="4">
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      <Clock size={22} />
+                    </div>
+                    <div className="empty-state-title">No attendance records logged</div>
+                    <div className="empty-state-desc">
+                      {selectedDate ? `No check-ins recorded for ${selectedDate}.` : 'Record daily check-ins to monitor team presence.'}
+                    </div>
+                    <button className="btn btn-primary btn-sm" onClick={() => openModal('addAttendance')}>
+                      <Plus size={14} />
+                      <span>Log Check-In</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             )}
@@ -845,11 +1104,15 @@ function LeavesView({ leaves, users, openModal, onStatusUpdated, showToast }) {
         body: JSON.stringify({ status })
       });
       if (res.ok) {
-        showToast(`Leave request ${status}`);
+        showToast(`Leave application #${leaveId} marked as ${status}`, 'success');
         onStatusUpdated();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || 'Could not update status', 'error');
       }
     } catch (e) {
       console.error(e);
+      showToast('Network error while updating leave', 'error');
     }
   };
 
@@ -857,11 +1120,12 @@ function LeavesView({ leaves, users, openModal, onStatusUpdated, showToast }) {
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <h2>Leave & Academic Permissions ({leaves.length})</h2>
-          <p>Review student exam excuses, hackathon attendance, and faculty permissions</p>
+          <h2>Leave & Time-Off Management ({leaves.length})</h2>
+          <p>Review leave applications, medical time-off, and manager approvals</p>
         </div>
         <button className="btn btn-primary" onClick={() => openModal('addLeave')}>
-          + Submit Leave Request
+          <Plus size={15} />
+          <span>Submit Leave Request</span>
         </button>
       </div>
 
@@ -869,48 +1133,66 @@ function LeavesView({ leaves, users, openModal, onStatusUpdated, showToast }) {
         <table className="data-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Student / Staff</th>
-              <th>Start Date</th>
-              <th>End Date</th>
+              <th>App #</th>
+              <th>Applicant</th>
+              <th>Period</th>
               <th>Reason & Purpose</th>
               <th>Status</th>
-              <th>Approval Actions</th>
+              <th style={{ textAlign: 'right' }}>Review Actions</th>
             </tr>
           </thead>
           <tbody>
             {leaves.map((l) => (
               <tr key={l.id}>
-                <td>#{l.id}</td>
+                <td>
+                  <code style={{ background: '#f1f5f9', padding: '3px 7px', borderRadius: '5px', fontSize: '11.5px', fontWeight: '700', color: '#475569' }}>
+                    #{l.id}
+                  </code>
+                </td>
                 <td><strong>{l.user_name}</strong></td>
-                <td>{l.start_date}</td>
-                <td>{l.end_date}</td>
-                <td>{l.reason}</td>
+                <td>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>
+                    {l.start_date} <span style={{ color: '#94a3b8' }}>to</span> {l.end_date}
+                  </div>
+                </td>
+                <td style={{ color: '#475569', maxWidth: '300px' }}>{l.reason}</td>
                 <td>
                   <span className={`status-badge status-${l.status.toLowerCase()}`}>
                     {l.status}
                   </span>
                 </td>
-                <td>
+                <td style={{ textAlign: 'right' }}>
                   {l.status === 'pending' ? (
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                    <div style={{ display: 'inline-flex', gap: '6px' }}>
                       <button className="btn btn-success btn-sm" onClick={() => handleUpdateStatus(l.id, 'approved')}>
-                        ✓ Approve
+                        <Check size={13} />
+                        <span>Approve</span>
                       </button>
                       <button className="btn btn-danger btn-sm" onClick={() => handleUpdateStatus(l.id, 'rejected')}>
-                        ✗ Reject
+                        <X size={13} />
+                        <span>Reject</span>
                       </button>
                     </div>
                   ) : (
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Processed</span>
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Resolved</span>
                   )}
                 </td>
               </tr>
             ))}
             {leaves.length === 0 && (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                  No leave requests submitted yet.
+                <td colSpan="6">
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      <CalendarRange size={22} />
+                    </div>
+                    <div className="empty-state-title">No leave requests pending</div>
+                    <div className="empty-state-desc">You are all caught up! Time-off requests submitted by personnel will appear here for governance.</div>
+                    <button className="btn btn-primary btn-sm" onClick={() => openModal('addLeave')}>
+                      <Plus size={14} />
+                      <span>Submit Request</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             )}
@@ -936,11 +1218,15 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
         body: JSON.stringify({ status })
       });
       if (res.ok) {
-        showToast(`Transaction marked as ${status}`);
+        showToast(`Transaction #${recordId} marked as ${status}`, 'success');
         onStatusUpdated();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || 'Could not update transaction', 'error');
       }
     } catch (e) {
       console.error(e);
+      showToast('Network error while updating transaction', 'error');
     }
   };
 
@@ -951,11 +1237,11 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
       'Amount': f.amount,
       'Formatted Amount': formatNumber(f.amount),
       'Particulars': f.description,
-      'Assignee / Student': f.user_name || 'General Institute Account',
+      'Assignee / Account': f.user_name || 'General Corporate Account',
       'Status': f.status.toUpperCase()
     }));
-    exportToCSV(`SmartERP_Finance_Ledger_${new Date().toISOString().slice(0, 10)}.csv`, rows);
-    showToast('Exported complete financial ledger to CSV!');
+    exportToCSV(`Finance_Ledger_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    showToast('Exported complete financial ledger to CSV', 'success');
   };
 
   // Tax calculations
@@ -969,34 +1255,40 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
       <div className="kpi-grid">
         <div className="kpi-card">
           <div className="kpi-header">
-            <span className="kpi-title">Total Institutional Revenue</span>
-            <span className="kpi-icon-wrapper kpi-icon-emerald">📈</span>
+            <span className="kpi-title">Total Corporate Revenue</span>
+            <span className="kpi-icon-wrapper kpi-icon-emerald">
+              <TrendingUp size={18} />
+            </span>
           </div>
           <div className="kpi-value">{formatNumber(dashboardData.total_revenue)}</div>
           <div className="kpi-subtext positive">
-            {formatNumberCompact(dashboardData.total_revenue)} • Tuition fees, corporate grants & MoUs
+            {formatNumberCompact(dashboardData.total_revenue)} • Enterprise contracts, SaaS & client billing
           </div>
         </div>
 
         <div className="kpi-card">
           <div className="kpi-header">
-            <span className="kpi-title">Operational & Lab Expenses</span>
-            <span className="kpi-icon-wrapper kpi-icon-amber">📉</span>
+            <span className="kpi-title">Operational & Payroll Expenses</span>
+            <span className="kpi-icon-wrapper kpi-icon-amber">
+              <TrendingDown size={18} />
+            </span>
           </div>
           <div className="kpi-value">{formatNumber(dashboardData.total_expenses)}</div>
           <div className="kpi-subtext">
-            {formatNumberCompact(dashboardData.total_expenses)} • Faculty stipends, cloud compute & labs
+            {formatNumberCompact(dashboardData.total_expenses)} • Payroll, cloud infrastructure & facilities
           </div>
         </div>
 
         <div className="kpi-card">
           <div className="kpi-header">
-            <span className="kpi-title">Net Financial Balance</span>
-            <span className="kpi-icon-wrapper kpi-icon-blue">🏦</span>
+            <span className="kpi-title">Net Cash Balance</span>
+            <span className="kpi-icon-wrapper kpi-icon-blue">
+              <DollarSign size={18} />
+            </span>
           </div>
           <div className="kpi-value">{formatNumber(dashboardData.net_balance)}</div>
           <div className="kpi-subtext positive">
-            {formatNumberCompact(dashboardData.net_balance)} • Healthy institutional cash reserve
+            {formatNumberCompact(dashboardData.net_balance)} • Healthy treasury liquidity
           </div>
         </div>
       </div>
@@ -1006,17 +1298,18 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
         <div className="tax-calc-header">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '800' }}>Tax & Withholding Estimator</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: '800' }}>Tax & Withholding Settlement Estimator</h3>
             </div>
             <p style={{ fontSize: '12px', color: '#64748b' }}>
-              Calculate tax, withholding deductions, and net voucher settlement
+              Model GST tax breakdown, withholding deductions, and net voucher remittance
             </p>
           </div>
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => setShowTaxCalc(!showTaxCalc)}
           >
-            {showTaxCalc ? '▲ Hide Estimator' : '▼ Expand Estimator'}
+            {showTaxCalc ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <span>{showTaxCalc ? 'Hide Estimator' : 'Expand Estimator'}</span>
           </button>
         </div>
 
@@ -1024,7 +1317,7 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '14px' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label style={{ fontSize: '12px', fontWeight: '700' }}>Base Amount</label>
+                <label style={{ fontSize: '12px', fontWeight: '700' }}>Base Taxable Amount</label>
                 <input
                   type="number"
                   className="form-input"
@@ -1041,7 +1334,7 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
                   onChange={(e) => setCalcGSTRate(Number(e.target.value))}
                 >
                   <option value={0}>0% (Exempt)</option>
-                  <option value={5}>5% (Basic Goods/Services)</option>
+                  <option value={5}>5% (Essential Goods/Services)</option>
                   <option value={12}>12% (Standard Concessional)</option>
                   <option value={18}>18% (Standard Enterprise / IT)</option>
                   <option value={28}>28% (Luxury / Special)</option>
@@ -1049,16 +1342,16 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label style={{ fontSize: '12px', fontWeight: '700' }}>TDS Withholding (IT Act)</label>
+                <label style={{ fontSize: '12px', fontWeight: '700' }}>Withholding Rate (TDS)</label>
                 <select
                   className="form-select"
                   value={calcTDSRate}
                   onChange={(e) => setCalcTDSRate(Number(e.target.value))}
                 >
                   <option value={0}>0% (None)</option>
-                  <option value={1}>1% (Sec 194C Contractor)</option>
-                  <option value={2}>2% (Sec 194J Technical Services)</option>
-                  <option value={10}>10% (Sec 194J Professional Services)</option>
+                  <option value={1}>1% (Contractor / Vendor)</option>
+                  <option value={2}>2% (Technical Services)</option>
+                  <option value={10}>10% (Professional Consultation)</option>
                 </select>
               </div>
             </div>
@@ -1069,19 +1362,19 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
                 <div className="tax-stat-val">{formatNumber(calcBaseAmount)}</div>
               </div>
               <div className="tax-stat">
-                <div className="tax-stat-label">Tax Part A ({calcGSTRate / 2}%)</div>
-                <div className="tax-stat-val" style={{ color: '#059669' }}>{formatNumber(gstAmount / 2)}</div>
+                <div className="tax-stat-label">Component A ({calcGSTRate / 2}%)</div>
+                <div className="tax-stat-val" style={{ color: '#059669' }}>+{formatNumber(gstAmount / 2)}</div>
               </div>
               <div className="tax-stat">
-                <div className="tax-stat-label">Tax Part B ({calcGSTRate / 2}%)</div>
-                <div className="tax-stat-val" style={{ color: '#059669' }}>{formatNumber(gstAmount / 2)}</div>
+                <div className="tax-stat-label">Component B ({calcGSTRate / 2}%)</div>
+                <div className="tax-stat-val" style={{ color: '#059669' }}>+{formatNumber(gstAmount / 2)}</div>
               </div>
               <div className="tax-stat">
                 <div className="tax-stat-label">Withholding ({calcTDSRate}%)</div>
-                <div className="tax-stat-val" style={{ color: '#dc2626' }}>- {formatNumber(tdsAmount)}</div>
+                <div className="tax-stat-val" style={{ color: '#dc2626' }}>-{formatNumber(tdsAmount)}</div>
               </div>
               <div className="tax-stat" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
-                <div className="tax-stat-label" style={{ color: '#1d4ed8' }}>Net Payable / Receivable</div>
+                <div className="tax-stat-label" style={{ color: '#1d4ed8' }}>Net Settlement</div>
                 <div className="tax-stat-val" style={{ color: '#1d4ed8' }}>{formatNumber(netPayable)}</div>
               </div>
             </div>
@@ -1092,15 +1385,17 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
       <div className="panel">
         <div className="panel-header">
           <div className="panel-title">
-            <h2>Financial Transactions & Ledger ({finance.length})</h2>
-            <p>Institutional fees, research disbursements, and expense records</p>
+            <h2>Financial Ledger & Journals ({finance.length})</h2>
+            <p>Audited revenues, operating disbursements, and payroll transactions</p>
           </div>
           <div className="panel-controls">
             <button className="btn btn-secondary" onClick={handleExportCSV}>
-              📥 Export Ledger (CSV)
+              <Download size={15} />
+              <span>Export Ledger (CSV)</span>
             </button>
             <button className="btn btn-primary" onClick={() => openModal('addFinance')}>
-              + Record Transaction
+              <Plus size={15} />
+              <span>Record Transaction</span>
             </button>
           </div>
         </div>
@@ -1113,16 +1408,16 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
                 <th>Classification</th>
                 <th>Amount</th>
                 <th>Description & Particulars</th>
-                <th>Student / Account</th>
+                <th>Account / Assignee</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {finance.map((f) => (
                 <tr key={f.id}>
                   <td>
-                    <code style={{ background: '#f1f5f9', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
+                    <code style={{ background: '#f1f5f9', padding: '3px 7px', borderRadius: '5px', fontSize: '11.5px', fontWeight: '700', color: '#334155' }}>
                       VCH-2026-{String(f.id).padStart(4, '0')}
                     </code>
                   </td>
@@ -1136,25 +1431,27 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
                       {formatNumber(f.amount)}
                     </strong>
                   </td>
-                  <td>{f.description}</td>
-                  <td>{f.user_name || 'General Institute Account'}</td>
+                  <td style={{ color: '#475569' }}>{f.description}</td>
+                  <td>{f.user_name || 'General Corporate Account'}</td>
                   <td>
                     <span className={`status-badge status-${f.status.toLowerCase()}`}>
                       {f.status}
                     </span>
                   </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', gap: '6px' }}>
                       <button
                         className="btn btn-secondary btn-sm"
                         title="View Official Voucher"
                         onClick={() => onViewVoucher(f)}
                       >
-                        📄 Receipt
+                        <FileText size={13} />
+                        <span>Receipt</span>
                       </button>
                       {f.status === 'pending' && (
                         <button className="btn btn-success btn-sm" onClick={() => handleUpdateStatus(f.id, 'approved')}>
-                          Approve
+                          <Check size={13} />
+                          <span>Approve</span>
                         </button>
                       )}
                     </div>
@@ -1163,8 +1460,18 @@ function FinanceView({ finance, dashboardData, openModal, onStatusUpdated, showT
               ))}
               {finance.length === 0 && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                    No financial transactions recorded yet.
+                  <td colSpan="7">
+                    <div className="empty-state">
+                      <div className="empty-state-icon">
+                        <Receipt size={22} />
+                      </div>
+                      <div className="empty-state-title">No transactions recorded yet</div>
+                      <div className="empty-state-desc">Post revenues, invoices, or operating expenses to maintain your general ledger.</div>
+                      <button className="btn btn-primary btn-sm" onClick={() => openModal('addFinance')}>
+                        <Plus size={14} />
+                        <span>Record First Transaction</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -1191,18 +1498,18 @@ function VoucherModal({ record, onClose }) {
       <div className="voucher-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px' }}>📄</span>
-            <h3>Official Payment Voucher & Fee Receipt</h3>
+            <FileText size={18} color="#2563eb" />
+            <h3>Official Payment Voucher & Tax Invoice</h3>
           </div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="voucher-scroll-area">
           <div className="voucher-body">
             <div className="voucher-top">
               <div>
-                <div className="voucher-org-name">SMART ERP INSTITUTE & ENTERPRISE</div>
-                <div className="voucher-org-sub">Approved Educational Institute & Cloud Technology Center</div>
+                <div className="voucher-org-name">SMART ERP ENTERPRISE SOLUTIONS</div>
+                <div className="voucher-org-sub">Cloud Enterprise Resource Planning & Workforce OS</div>
                 <div className="voucher-org-sub">Connaught Place, Barakhamba Road, New Delhi - 110001, India</div>
                 <div style={{ marginTop: '6px', fontSize: '11px', color: '#475569' }}>
                   <strong>GSTIN:</strong> 07AABCS1429B1Z8 &nbsp;|&nbsp; <strong>State Code:</strong> 07 (Delhi)
@@ -1222,7 +1529,7 @@ function VoucherModal({ record, onClose }) {
             <div className="voucher-details-grid">
               <div>
                 <span style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Paid To / Account:</span>
-                <div style={{ fontWeight: '700', color: '#0f172a' }}>{record.user_name || 'General Institutional Account'}</div>
+                <div style={{ fontWeight: '700', color: '#0f172a' }}>{record.user_name || 'General Corporate Account'}</div>
               </div>
               <div>
                 <span style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Classification:</span>
@@ -1232,7 +1539,7 @@ function VoucherModal({ record, onClose }) {
               </div>
               <div>
                 <span style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Payment Mode:</span>
-                <div style={{ fontWeight: '600' }}>NEFT / RTGS / UPI Electronic Transfer</div>
+                <div style={{ fontWeight: '600' }}>NEFT / RTGS / Corporate Wire Transfer</div>
               </div>
               <div>
                 <span style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Status:</span>
@@ -1258,13 +1565,13 @@ function VoucherModal({ record, onClose }) {
                 </tr>
                 <tr>
                   <td>2</td>
-                  <td>Tax Component A (9%)</td>
+                  <td>Central Component (9%)</td>
                   <td>-</td>
                   <td style={{ textAlign: 'right' }}>{formatNumber(cgst)}</td>
                 </tr>
                 <tr>
                   <td>3</td>
-                  <td>Tax Component B (9%)</td>
+                  <td>State Component (9%)</td>
                   <td>-</td>
                   <td style={{ textAlign: 'right' }}>{formatNumber(sgst)}</td>
                 </tr>
@@ -1281,13 +1588,13 @@ function VoucherModal({ record, onClose }) {
 
             <div className="voucher-footer">
               <div className="voucher-seal">
-                <span>✓</span>
-                <span>DIGITALLY AUDITED & APPROVED</span>
+                <ShieldCheck size={14} />
+                <span>DIGITALLY AUDITED & CERTIFIED</span>
               </div>
               <div className="voucher-sign">
                 <div style={{ borderBottom: '1px solid #94a3b8', width: '160px', marginBottom: '4px' }}></div>
                 <strong>Authorized Signatory</strong>
-                <div>Finance & Accounts Department</div>
+                <div>Finance & Corporate Treasury</div>
               </div>
             </div>
           </div>
@@ -1298,7 +1605,8 @@ function VoucherModal({ record, onClose }) {
             Close
           </button>
           <button className="btn btn-primary" onClick={handlePrint}>
-            🖨️ Print / Download Voucher
+            <Printer size={15} />
+            <span>Print / Save PDF</span>
           </button>
         </div>
       </div>
@@ -1307,29 +1615,36 @@ function VoucherModal({ record, onClose }) {
 }
 
 // ---------------- PERFORMANCE VIEW ----------------
-function PerformanceView({ performance, openModal, onDeleted, showToast }) {
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this evaluation?')) return;
-    try {
-      const res = await fetch(`${API_BASE}/performance/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('Evaluation deleted');
-        onDeleted();
+function PerformanceView({ performance, openModal, onDeleted, showToast, setConfirmDialog }) {
+  const promptDelete = (id, user_name) => {
+    setConfirmDialog({
+      title: 'Delete Performance Review',
+      message: `Are you sure you want to remove the appraisal review for ${user_name}?`,
+      confirmText: 'Delete Review',
+      isDanger: true,
+      onConfirm: async () => {
+        const res = await fetch(`${API_BASE}/performance/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Performance evaluation #${id} removed`, 'success');
+          onDeleted();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.detail || 'Could not delete review', 'error');
+        }
       }
-    } catch (e) {
-      console.error(e);
-    }
+    });
   };
 
   return (
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <h2>Academic & Faculty Evaluations ({performance.length})</h2>
-          <p>Student academic CGPA, research milestones, and institutional appraisals</p>
+          <h2>Performance Reviews & Appraisals ({performance.length})</h2>
+          <p>Employee quarterly appraisals, goal achievements, and leadership feedback</p>
         </div>
         <button className="btn btn-primary" onClick={() => openModal('addPerformance')}>
-          + Submit Performance Review
+          <Plus size={15} />
+          <span>Submit Review</span>
         </button>
       </div>
 
@@ -1338,34 +1653,49 @@ function PerformanceView({ performance, openModal, onDeleted, showToast }) {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Student / Scholar</th>
-              <th>Rating / CGPA (out of 5.0)</th>
-              <th>Academic Remarks & Achievements</th>
-              <th>Actions</th>
+              <th>Team Member</th>
+              <th>Appraisal Score</th>
+              <th>Feedback & Key Milestones</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {performance.map((p) => (
               <tr key={p.id}>
-                <td>#{p.id}</td>
+                <td>
+                  <code style={{ background: '#f1f5f9', padding: '3px 7px', borderRadius: '5px', fontSize: '11.5px', fontWeight: '700', color: '#475569' }}>
+                    #{p.id}
+                  </code>
+                </td>
                 <td><strong>{p.user_name}</strong></td>
                 <td>
-                  <span style={{ fontWeight: '800', color: '#8b5cf6', fontSize: '15px' }}>
-                    ⭐ {p.score.toFixed(1)}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '800', color: '#7c3aed', fontSize: '14.5px' }}>
+                    <Award size={16} />
+                    {Number(p.score).toFixed(1)} / 5.0
                   </span>
                 </td>
-                <td>{p.remarks}</td>
-                <td>
-                  <button className="btn-icon" onClick={() => handleDelete(p.id)}>
-                    🗑️
+                <td style={{ color: '#475569', maxWidth: '380px' }}>{p.remarks}</td>
+                <td style={{ textAlign: 'right' }}>
+                  <button className="btn-icon" onClick={() => promptDelete(p.id, p.user_name)} title="Delete Review">
+                    <Trash2 size={15} />
                   </button>
                 </td>
               </tr>
             ))}
             {performance.length === 0 && (
               <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                  No performance records submitted yet.
+                <td colSpan="5">
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      <Award size={22} />
+                    </div>
+                    <div className="empty-state-title">No performance reviews recorded</div>
+                    <div className="empty-state-desc">Evaluate staff competencies and log constructive appraisal feedback.</div>
+                    <button className="btn btn-primary btn-sm" onClick={() => openModal('addPerformance')}>
+                      <Plus size={14} />
+                      <span>Submit Review</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             )}
@@ -1377,33 +1707,40 @@ function PerformanceView({ performance, openModal, onDeleted, showToast }) {
 }
 
 // ---------------- NOTICES VIEW ----------------
-function NoticesView({ notices, openModal, onDeleted, showToast }) {
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this notice?')) return;
-    try {
-      const res = await fetch(`${API_BASE}/notices/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('Notice removed');
-        onDeleted();
+function NoticesView({ notices, openModal, onDeleted, showToast, setConfirmDialog }) {
+  const promptDelete = (n) => {
+    setConfirmDialog({
+      title: 'Remove Bulletin',
+      message: `Are you sure you want to remove the announcement "${n.title}"?`,
+      confirmText: 'Remove Bulletin',
+      isDanger: true,
+      onConfirm: async () => {
+        const res = await fetch(`${API_BASE}/notices/${n.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Announcement "${n.title.slice(0, 25)}..." removed`, 'success');
+          onDeleted();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.detail || 'Could not delete notice', 'error');
+        }
       }
-    } catch (e) {
-      console.error(e);
-    }
+    });
   };
 
   return (
     <div className="panel">
       <div className="panel-header">
         <div className="panel-title">
-          <h2>National Notice Board ({notices.length})</h2>
-          <p>Official circulars, academic milestones, and festival schedules</p>
+          <h2>Company Bulletin Board ({notices.length})</h2>
+          <p>Official circulars, executive announcements, and organizational policies</p>
         </div>
         <button className="btn btn-primary" onClick={() => openModal('addNotice')}>
-          + Post Announcement
+          <Plus size={15} />
+          <span>Post Announcement</span>
         </button>
       </div>
 
-      <div className="notice-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+      <div className="notice-grid">
         {notices.map((n) => (
           <div className="notice-card" key={n.id}>
             <div>
@@ -1412,21 +1749,31 @@ function NoticesView({ notices, openModal, onDeleted, showToast }) {
               </div>
               <p className="notice-body">{n.content}</p>
             </div>
-            <div className="notice-footer" style={{ marginTop: '16px' }}>
+            <div className="notice-footer">
               <div>
-                <span style={{ display: 'block', fontWeight: '600' }}>By: {n.author_name || 'Dean & Administration'}</span>
+                <span style={{ display: 'block', fontWeight: '600' }}>By: {n.author_name || 'Executive Management'}</span>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                  {n.created_at ? new Date(n.created_at).toLocaleDateString('en-IN') : 'Recent'}
+                  {n.created_at ? new Date(n.created_at).toLocaleDateString() : 'Recent'}
                 </span>
               </div>
-              <button className="btn-icon" title="Delete Announcement" onClick={() => handleDelete(n.id)}>
-                🗑️
+              <button className="btn-icon" title="Remove Bulletin" onClick={() => promptDelete(n)}>
+                <Trash2 size={15} />
               </button>
             </div>
           </div>
         ))}
         {notices.length === 0 && (
-          <p style={{ color: '#94a3b8' }}>No announcements published.</p>
+          <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+            <div className="empty-state-icon">
+              <Megaphone size={22} />
+            </div>
+            <div className="empty-state-title">No company circulars published</div>
+            <div className="empty-state-desc">Broadcast company news, upcoming holiday schedules, and town-hall invites.</div>
+            <button className="btn btn-primary btn-sm" onClick={() => openModal('addNotice')}>
+              <Plus size={14} />
+              <span>Post Announcement</span>
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -1434,19 +1781,22 @@ function NoticesView({ notices, openModal, onDeleted, showToast }) {
 }
 
 // ---------------- MODAL MANAGER ----------------
-function ModalManager({ modalType, closeModal, users, departments, onSuccess }) {
+function ModalManager({ modalType, closeModal, users, departments, onSuccess, showToast }) {
   const [formData, setFormData] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    setFormError(null);
+
     let endpoint = '';
     let payload = { ...formData };
 
     if (modalType === 'addUser') {
       endpoint = `${API_BASE}/users`;
-      payload.role = payload.role || 'student';
+      payload.role = payload.role || 'employee';
       if (!payload.password) payload.password = 'user123';
       if (payload.department_id) payload.department_id = parseInt(payload.department_id);
     } else if (modalType === 'addDept') {
@@ -1484,14 +1834,14 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        const err = await res.json();
-        alert(err.detail || 'Submission failed');
+        const err = await res.json().catch(() => ({}));
+        setFormError(err.detail || 'The request could not be completed. Please review form entries.');
       } else {
-        onSuccess('Entry created and saved successfully!');
+        onSuccess('Record created and synced successfully!');
       }
     } catch (err) {
       console.error(err);
-      alert('Network request error.');
+      setFormError('Network connection issue. Please verify backend service.');
     } finally {
       setSubmitting(false);
     }
@@ -1501,45 +1851,55 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
     <div className="modal-overlay" onClick={closeModal}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>
-            {modalType === 'addUser' && 'Enroll New Student / Faculty Member'}
-            {modalType === 'addDept' && 'Create Academic Department'}
-            {modalType === 'addAttendance' && 'Record Classroom Attendance'}
-            {modalType === 'addLeave' && 'Submit Leave / Academic Permission'}
-            {modalType === 'addFinance' && 'Record Financial Transaction'}
-            {modalType === 'addPerformance' && 'Submit Academic Evaluation'}
-            {modalType === 'addNotice' && 'Publish Notice Circular'}
-          </h3>
-          <button className="modal-close" onClick={closeModal}>✕</button>
+          <div>
+            <h3>
+              {modalType === 'addUser' && 'Onboard Team Member'}
+              {modalType === 'addDept' && 'Create Department'}
+              {modalType === 'addAttendance' && 'Log Attendance'}
+              {modalType === 'addLeave' && 'Submit Leave Application'}
+              {modalType === 'addFinance' && 'Record Financial Entry'}
+              {modalType === 'addPerformance' && 'Log Performance Review'}
+              {modalType === 'addNotice' && 'Broadcast Announcement'}
+            </h3>
+            <span className="modal-esc-hint">Press ESC to dismiss</span>
+          </div>
+          <button className="modal-close" onClick={closeModal} title="Close"><X size={18} /></button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {formError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px', color: '#991b1b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={16} />
+                <span>{formError}</span>
+              </div>
+            )}
+
             {/* ADD USER FORM */}
             {modalType === 'addUser' && (
               <>
                 <div className="form-group">
-                  <label>Full Name (Indian Student / Scholar)</label>
+                  <label>Full Name</label>
                   <input
                     required
                     className="form-input"
-                    placeholder="e.g. Aarav Sharma / Ananya Patel"
+                    placeholder="e.g. Sarah Jenkins"
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Institutional Email</label>
+                  <label>Corporate Email</label>
                   <input
                     required
                     type="email"
                     className="form-input"
-                    placeholder="aarav.s@erp.com"
+                    placeholder="sarah.jenkins@erp.com"
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   />
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Default Password</label>
+                    <label>Initial Password</label>
                     <input
                       required
                       type="password"
@@ -1553,18 +1913,17 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                     <label>Role</label>
                     <select
                       className="form-select"
-                      defaultValue="student"
+                      defaultValue="employee"
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     >
-                      <option value="student">🎓 Student / Scholar</option>
-                      <option value="employee">👔 Faculty / Staff</option>
-                      <option value="manager">💼 Department Head / Manager</option>
-                      <option value="admin">🛡️ Administrator</option>
+                      <option value="employee">Staff / Engineer</option>
+                      <option value="manager">Department Lead / Manager</option>
+                      <option value="admin">System Administrator</option>
                     </select>
                   </div>
                 </div>
                 <div className="form-group">
-                  <label>Department / Discipline</label>
+                  <label>Assigned Department</label>
                   <select
                     className="form-select"
                     onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
@@ -1586,16 +1945,16 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                   <input
                     required
                     className="form-input"
-                    placeholder="e.g. Cyber Physical Systems & Robotics"
+                    placeholder="e.g. Product Strategy & User Research"
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Academic Description</label>
+                  <label>Functional Description</label>
                   <textarea
                     className="form-textarea"
                     rows="3"
-                    placeholder="Disciplines, laboratories, and degree programs..."
+                    placeholder="Mission, team charters, and focus areas..."
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   ></textarea>
                 </div>
@@ -1606,7 +1965,7 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
             {modalType === 'addAttendance' && (
               <>
                 <div className="form-group">
-                  <label>Select Student / Member</label>
+                  <label>Team Member</label>
                   <select
                     required
                     className="form-select"
@@ -1629,14 +1988,14 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                     />
                   </div>
                   <div className="form-group">
-                    <label>Status</label>
+                    <label>Presence Status</label>
                     <select
                       className="form-select"
                       defaultValue="present"
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                     >
-                      <option value="present">Present (In-Class / On-Site)</option>
-                      <option value="remote">Remote (Virtual Lab)</option>
+                      <option value="present">Present (In-Office)</option>
+                      <option value="remote">Remote (Work From Home)</option>
                       <option value="late">Late Arrival</option>
                       <option value="absent">Absent</option>
                     </select>
@@ -1649,14 +2008,14 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
             {modalType === 'addLeave' && (
               <>
                 <div className="form-group">
-                  <label>Select Student / Staff</label>
+                  <label>Team Member</label>
                   <select
                     required
                     className="form-select"
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
                   >
                     {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.department_name || 'Student'})</option>
+                      <option key={u.id} value={u.id}>{u.name} ({u.department_name || 'Staff'})</option>
                     ))}
                   </select>
                 </div>
@@ -1681,12 +2040,12 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                   </div>
                 </div>
                 <div className="form-group">
-                  <label>Reason for Leave / Permission</label>
+                  <label>Reason & Context</label>
                   <textarea
                     required
                     className="form-textarea"
                     rows="3"
-                    placeholder="e.g. Smart India Hackathon participation or semester exam prep..."
+                    placeholder="e.g. Annual planned vacation or medical appointment..."
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                   ></textarea>
                 </div>
@@ -1704,9 +2063,9 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                       defaultValue="Revenue"
                       onChange={(e) => setFormData({ ...formData, record_type: e.target.value })}
                     >
-                      <option value="Revenue">Revenue (Tuition Fees, Grants, MoUs)</option>
-                      <option value="Expense">Expense (Equipment, Labs, Cloud)</option>
-                      <option value="Payroll">Payroll (Stipends & Salaries)</option>
+                      <option value="Revenue">Revenue (Client Invoices, Contracts)</option>
+                      <option value="Expense">Expense (Cloud Compute, Facilities)</option>
+                      <option value="Payroll">Payroll (Salaries & Bonuses)</option>
                     </select>
                   </div>
                   <div className="form-group">
@@ -1716,18 +2075,18 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                       type="number"
                       step="0.01"
                       className="form-input"
-                      placeholder="e.g. 50000.00"
+                      placeholder="e.g. 75000.00"
                       onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                     />
                   </div>
                 </div>
                 <div className="form-group">
-                  <label>Assignee / Student Account (Optional)</label>
+                  <label>Related Account / Assignee (Optional)</label>
                   <select
                     className="form-select"
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
                   >
-                    <option value="">General Institutional Treasury</option>
+                    <option value="">General Corporate Account</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
                     ))}
@@ -1738,7 +2097,7 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                   <input
                     required
                     className="form-input"
-                    placeholder="e.g. Annual Semester Tuition Fee or Cloud Lab License"
+                    placeholder="e.g. Enterprise Cloud Compute License or Client Milestone 2"
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
                 </div>
@@ -1749,19 +2108,19 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
             {modalType === 'addPerformance' && (
               <>
                 <div className="form-group">
-                  <label>Select Student / Scholar</label>
+                  <label>Team Member</label>
                   <select
                     required
                     className="form-select"
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
                   >
                     {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.department_name || 'Scholar'})</option>
+                      <option key={u.id} value={u.id}>{u.name} ({u.department_name || 'Staff'})</option>
                     ))}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Performance / CGPA Score (1.0 to 5.0)</label>
+                  <label>Appraisal Rating (1.0 to 5.0)</label>
                   <input
                     required
                     type="number"
@@ -1774,12 +2133,12 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                   />
                 </div>
                 <div className="form-group">
-                  <label>Academic Remarks & Achievements</label>
+                  <label>Key Achievements & Feedback</label>
                   <textarea
                     required
                     className="form-textarea"
                     rows="3"
-                    placeholder="Academic ranks, publications, hackathon awards..."
+                    placeholder="Specific milestones hit, leadership qualities, and growth opportunities..."
                     onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                   ></textarea>
                 </div>
@@ -1790,11 +2149,11 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
             {modalType === 'addNotice' && (
               <>
                 <div className="form-group">
-                  <label>Notice Circular Title</label>
+                  <label>Announcement Title</label>
                   <input
                     required
                     className="form-input"
-                    placeholder="e.g. 🚀 Smart India Hackathon 2026 Registration Open"
+                    placeholder="e.g. Q4 Townhall & Product Strategy Briefing"
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   />
                 </div>
@@ -1804,7 +2163,7 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                     className="form-select"
                     onChange={(e) => setFormData({ ...formData, author_id: e.target.value })}
                   >
-                    <option value="">Dean & Executive Management</option>
+                    <option value="">Executive Management</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
                     ))}
@@ -1816,7 +2175,7 @@ function ModalManager({ modalType, closeModal, users, departments, onSuccess }) 
                     required
                     className="form-textarea"
                     rows="4"
-                    placeholder="Official circular details and instructions..."
+                    placeholder="Share the full announcement details and next steps..."
                     onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   ></textarea>
                 </div>
